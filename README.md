@@ -59,6 +59,13 @@ whois -h registrar.sandbar.lab mysite.beach
 ```
 Students should type `http://mysite.beach` in full, since a bare `mysite.beach` may be treated as a search.
 
+### Updating
+```bash
+cd /root/registrar && git pull && ./deploy/setup-lxc.sh && systemctl restart registrar-web registrar-whois
+```
+The script only uses apt if a package is missing. If your Debian mirror's Release files have expired (`Release file ... is expired`),
+fix the mirror, or install once with `APT_OPTS="-o Acquire::Check-Valid-Until=false" ./deploy/setup-lxc.sh`.
+
 ## Day-to-day
 | Task | How |
 |---|---|

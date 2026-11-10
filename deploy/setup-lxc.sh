@@ -12,9 +12,20 @@ set -euo pipefail
 HERE=$(dirname "$(readlink -f "$0")")
 SRC=$(dirname "$HERE")
 
-echo "==> Installing packages"
-apt-get update -qq
-apt-get install -y -qq python3 python3-flask python3-dnspython gunicorn whois dnsutils
+# Only touch apt when something is actually missing, so routine updates ("git pull" + this script)
+# keep working even if the Debian mirror is down or stale.
+# If your mirror's Release files have expired, you can run:
+#     APT_OPTS="-o Acquire::Check-Valid-Until=false" ./deploy/setup-lxc.sh
+PKGS="python3 python3-flask python3-dnspython gunicorn whois dnsutils"
+missing=""
+for p in $PKGS; do dpkg -s "$p" >/dev/null 2>&1 || missing="$missing $p"; done
+if [ -n "$missing" ]; then
+    echo "==> Installing packages:$missing"
+    apt-get ${APT_OPTS:-} update -qq
+    apt-get ${APT_OPTS:-} install -y -qq $missing
+else
+    echo "==> Required packages already installed (skipping apt)"
+fi
 
 echo "==> Creating user and directories"
 id registrar >/dev/null 2>&1 || useradd --system --home-dir /var/lib/registrar --shell /usr/sbin/nologin registrar
