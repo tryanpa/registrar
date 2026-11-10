@@ -1,0 +1,9 @@
+; Zone for the "beach" TLD. Maintained by BIND after first load .
+$TTL 300
+@   IN SOA  @@NS_HOST@@. hostmaster.sandbar.lab. (
+            1       ; serial
+            3600    ; refresh
+            600     ; retry
+            86400   ; expire
+            300 )   ; negative-cache TTL
+    IN NS   @@NS_HOST@@.

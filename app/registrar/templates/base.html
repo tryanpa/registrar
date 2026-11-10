@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ cfg.registrar_name }}{% endblock %}</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+{% macro wave_path() %}<path d="M0 22c120-26 240-26 360 0s240 26 360 0 240-26 360 0 240 26 360 0v16H0z"/>{% endmacro %}
+
+<header class="site-header{% if not hero %} small{% endif %}">
+  <div class="wrap bar">
+    <a class="brand" href="{{ url_for('home') }}">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="40" cy="24" r="10" fill="#ffc65a"/><path d="M2 38c8-6 14-6 21 0s14 6 21 0 14-6 18 0v22H2z" fill="#5fc2cf"/><path d="M2 48c8-6 14-6 21 0s14 6 21 0 14-6 18 0v12H2z" fill="#fbf5ea"/></svg>
+      {{ cfg.registrar_name }}
+    </a>
+    <nav class="main" aria-label="Main">
+      <a href="{{ url_for('home') }}" {% if request.endpoint == 'home' %}class="active"{% endif %}>Find a name</a>
+      {% if g.user %}<a href="{{ url_for('my_domains') }}" {% if request.endpoint == 'my_domains' %}class="active"{% endif %}>My domains</a>{% endif %}
+      <a href="{{ url_for('whois_page') }}" {% if request.endpoint == 'whois_page' %}class="active"{% endif %}>WHOIS</a>
+      <a href="{{ url_for('help_page') }}" {% if request.endpoint == 'help_page' %}class="active"{% endif %}>Help</a>
+      {% if g.user and g.user['is_admin'] %}<a href="{{ url_for('admin_home') }}">Admin{% if pending_count %}<span class="pill-count">{{ pending_count }}</span>{% endif %}</a>{% endif %}
+    </nav>
+    <div class="nav-right">
+      {% if g.user %}
+        <span style="opacity:.85;font-size:.9rem">{{ g.user['display_name'] }}</span>
+        <form method="post" action="{{ url_for('logout') }}">{{ csrf() }}<button class="linklike" type="submit">Log out</button></form>
+      {% else %}
+        <a href="{{ url_for('login') }}">Log in</a>
+        <a href="{{ url_for('signup') }}" style="background:rgba(255,255,255,.18)">Sign up</a>
+      {% endif %}
+    </div>
+  </div>
+  {% if not hero %}<svg class="wave header-wave" viewBox="0 0 1440 38" preserveAspectRatio="none" aria-hidden="true">{{ wave_path() }}</svg>{% endif %}
+  {% block hero %}{% endblock %}
+</header>
+
+<main>
+  <div class="wrap">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="flashes" role="status">
+        {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+      </div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">{{ cfg.registrar_name }} &middot; a pretend registrar for the lab network &middot; nothing here touches the real internet</div>
+</footer>
+</body>
+</html>

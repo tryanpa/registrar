@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ e.code }} · {{ cfg.registrar_name }}{% endblock %}
+{% block content %}
+<div class="card empty narrow">
+  <div class="big">🌊</div>
+  <h2>{% if e.code == 404 %}Lost at sea{% elif e.code == 403 %}Restricted beach{% else %}Something went wrong{% endif %}</h2>
+  <p class="muted">{{ e.description if e.code != 404 else "We couldn't find that page." }}</p>
+  <a class="btn" href="{{ url_for('home') }}">Back to shore</a>
+</div>
+{% endblock %}

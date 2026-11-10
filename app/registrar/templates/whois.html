@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}WHOIS · {{ cfg.registrar_name }}{% endblock %}
+{% block content %}
+<div class="page-title"><h1>WHOIS lookup</h1></div>
+<div class="card">
+  <form method="get" action="{{ url_for('whois_page') }}" class="inline-input">
+    <input type="search" name="q" value="{{ q }}" placeholder="mysite.{{ cfg.tlds[0] }}" aria-label="Domain" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button class="btn" type="submit">Look up</button>
+  </form>
+</div>
+{% if text %}
+<div class="card"><pre class="whois-out" style="margin:0">{{ text }}</pre></div>
+{% endif %}
+<div class="card flat" style="margin-top:1rem">
+  <h3>From a terminal</h3>
+  <p class="muted">This page asks the same WHOIS server your terminal can talk to:</p>
+  <pre><code>whois -h {{ cfg.registrar_host }} {{ q or 'mysite.' ~ cfg.tlds[0] }}</code></pre>
+</div>
+{% endblock %}

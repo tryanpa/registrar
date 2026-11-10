@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}My domains · {{ cfg.registrar_name }}{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>My domains</h1>
+  <div class="btn-row">
+    <span class="muted">{{ n_active }} of {{ cfg.max_domains }} name{{ 's' if cfg.max_domains != 1 }} used</span>
+    {% if n_active < cfg.max_domains %}<a class="btn teal" href="{{ url_for('home') }}">+ Find a new name</a>{% endif %}
+  </div>
+</div>
+
+{% if not domains %}
+  <div class="card empty">
+    <div class="big">🏖️</div>
+    <h2>No domains yet</h2>
+    <p class="muted">Search for a name and send your first registration request.</p>
+    <a class="btn" href="{{ url_for('home') }}">Find a name</a>
+  </div>
+{% else %}
+<div class="grid cols-2">
+  {% for d in domains %}
+  <div class="card domain-card">
+    <div class="meta"><span class="badge {{ d.status }}">{{ {'approved':'Live','pending':'Awaiting approval','rejected':'Rejected','revoked':'Revoked'}[d.status] }}</span>
+      <span class="muted" style="font-size:.85rem">{{ d.created_at[:10] }}</span></div>
+    <h3>{{ d.name }}<span style="color:var(--ocean)">.{{ d.tld }}</span></h3>
+
+    <dl class="kv">
+      <dt>Points to</dt><dd><code>{{ d.ip }}</code></dd>
+      <dt>Also works</dt><dd><code>www.{{ d.name }}.{{ d.tld }}</code></dd>
+      {% if d.purpose %}<dt>About</dt><dd>{{ d.purpose }}</dd>{% endif %}
+    </dl>
+
+    {% if d.admin_note %}<div class="note"><strong>Instructor note:</strong> {{ d.admin_note }}</div>{% endif %}
+
+    {% if d.status in ('pending', 'approved') %}
+      {% if d.status == 'pending' %}<p class="muted" style="font-size:.92rem">Your instructor will review this request. You can still fix the IP address below.</p>{% endif %}
+      <form method="post" action="{{ url_for('change_ip', domain_id=d.id) }}" class="field">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="ip{{ d.id }}">Change IP address</label>
+        <div class="inline-input">
+          <input id="ip{{ d.id }}" name="ip" type="text" value="{{ d.ip }}" required inputmode="decimal" autocomplete="off">
+          <button class="btn ghost" type="submit">Update</button>
+        </div>
+      </form>
+      {% if d.status == 'approved' %}
+        <p class="muted" style="font-size:.88rem">Test it: <code>dig +short {{ d.name }}.{{ d.tld }}</code> or open <code>http://{{ d.name }}.{{ d.tld }}</code></p>
+      {% endif %}
+      <div class="btn-row">
+        <a class="btn ghost sm" href="{{ url_for('whois_page', q=d.name ~ '.' ~ d.tld) }}">View WHOIS</a>
+        <form method="post" action="{{ url_for('release', domain_id=d.id) }}" class="inline"
+              data-confirm="Release {{ d.name }}.{{ d.tld }}? Your site will stop resolving and anyone can register the name.">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn danger sm" type="submit">{{ 'Release name' if d.status == 'approved' else 'Cancel request' }}</button>
+        </form>
+      </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

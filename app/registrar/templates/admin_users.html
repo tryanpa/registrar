@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Students · {{ cfg.registrar_name }}{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Students</h1>
+  <a class="btn ghost sm" href="{{ url_for('admin_home') }}">← Approval queue</a>
+</div>
+<div class="card">
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Active domains</th><th>Joined</th></tr></thead>
+    <tbody>
+    {% for u in users %}
+      <tr>
+        <td>{{ u.display_name }}{% if u.is_admin %} <span class="badge info">admin</span>{% endif %}</td>
+        <td>@{{ u.username }}</td>
+        <td class="muted">{{ u.email or '—' }}</td>
+        <td>{{ u.n }}</td>
+        <td class="muted">{{ u.created_at[:10] }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted" style="margin:1rem 0 0;font-size:.9rem">Password resets: <code>sudo -u registrar python3 -m registrar.cli set-password USER</code></p>
+</div>
+{% endblock %}

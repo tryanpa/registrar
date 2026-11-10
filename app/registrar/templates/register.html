@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Register {{ name }}.{{ tld }} · {{ cfg.registrar_name }}{% endblock %}
+{% block content %}
+<div class="narrow">
+  <div class="card">
+    <h1 style="font-size:1.6rem">Register a domain</h1>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field"><label for="name">Name</label>
+        <div class="inline-input">
+          <input id="name" name="name" type="text" required minlength="3" maxlength="40" value="{{ name }}" autocapitalize="off" spellcheck="false" autofocus>
+          <select name="tld" aria-label="Top-level domain" style="width:auto">
+            {% for t in cfg.tlds %}<option value="{{ t }}" {% if t == tld %}selected{% endif %}>.{{ t }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="hint">3-40 letters, numbers or hyphens. You get <code>www.</code> for free.</div></div>
+      <div class="field"><label for="ip">Web server IP address</label>
+        <input id="ip" name="ip" type="text" required inputmode="decimal" placeholder="10.0.20.15" value="{{ ip }}" autocomplete="off">
+        <div class="hint">The address of the VM running your web server. You can change it later.</div></div>
+      <div class="field"><label for="purpose">What is your site about? <span class="muted" style="font-weight:400">(optional)</span></label>
+        <input id="purpose" name="purpose" type="text" maxlength="120" value="{{ purpose }}">
+        <div class="hint">Shown in WHOIS as a comment.</div></div>
+      <div class="btn-row">
+        <button class="btn teal" type="submit">Submit for approval</button>
+        <a class="btn ghost" href="{{ url_for('home') }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

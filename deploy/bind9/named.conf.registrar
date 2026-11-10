@@ -1,0 +1,22 @@
+// Registrar zone for dns-dominica. Include this from /etc/bind/named.conf.local:
+//
+//     include "/etc/bind/named.conf.registrar";
+//
+// install-bind-config.sh does all of this for you.
+//
+// Student names live ONLY in the new "beach" zone (mysite.beach). Your existing sandbar.lab zone
+// is not referenced here at all: the registrar's key has no policy for it, so any update the key signs
+// for sandbar.lab (or any other zone) is refused by BIND.
+
+include "/etc/bind/registrar.key";      // defines: key "registrar-key" { ... };
+
+zone "beach" {
+    type primary;
+    file "/var/lib/bind/db.beach";      // /var/lib/bind is writable by named (the zone journal lives here too)
+    // Dynamic updates are accepted ONLY if signed with registrar-key, and only for the rules below.
+    // Rules are checked top to bottom; the first match wins; anything unmatched is refused.
+    update-policy {
+        deny  "registrar-key" name      "beach."  ANY;       // never touch the zone apex (SOA/NS)
+        grant "registrar-key" subdomain "beach."  A CNAME;   // student names: only A and CNAME records
+    };
+};

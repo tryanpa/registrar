@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Log in · {{ cfg.registrar_name }}{% endblock %}
+{% block content %}
+<div class="narrow">
+  <div class="card">
+    <h1 style="font-size:1.6rem">Welcome back</h1>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field"><label for="username">Username</label>
+        <input id="username" name="username" type="text" required autofocus autocomplete="username" autocapitalize="off"></div>
+      <div class="field"><label for="password">Password</label>
+        <input id="password" name="password" type="password" required autocomplete="current-password"></div>
+      <button class="btn" type="submit" style="width:100%">Log in</button>
+    </form>
+    <p class="muted" style="margin:1rem 0 0;text-align:center">New here? <a href="{{ url_for('signup') }}">Create an account</a></p>
+  </div>
+</div>
+{% endblock %}

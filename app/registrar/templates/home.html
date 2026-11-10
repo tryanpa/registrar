@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% set hero = true %}
+{% block hero %}
+<section class="hero">
+  <div class="sun" aria-hidden="true"></div>
+  <div class="wrap inner">
+    <h1>Claim your spot on the sandbar</h1>
+    <p class="lead">Pick a domain name for your web server. Search for a name, send a request, and once your instructor approves it your site is live across the lab.</p>
+    <form class="searchbox" action="{{ url_for('home') }}" method="get" role="search">
+      <input type="search" name="q" value="{{ q }}" placeholder="Find a name, like mysite" aria-label="Domain name" autofocus autocomplete="off" autocapitalize="off" spellcheck="false">
+      <button class="btn coral" type="submit">Search</button>
+    </form>
+    <div class="tld-chips">{% for t in cfg.tlds %}<span class="chip">.{{ t }}</span>{% endfor %}</div>
+  </div>
+  <div class="waves" aria-hidden="true">
+    <svg class="w1" viewBox="0 0 2880 90" preserveAspectRatio="none"><path fill="#bfe6ea" d="M0 45c180-40 360-40 540 0s360 40 540 0 360-40 540 0 360 40 540 0 360-40 540 0 360 40 540 0 360-40 540 0v45H0z" transform="translate(0 0)"/></svg>
+    <svg class="w2" viewBox="0 0 2880 90" preserveAspectRatio="none"><path fill="#e9d9b4" d="M0 55c240-34 480-34 720 0s480 34 720 0 480-34 720 0 480 34 720 0v35H0z"/></svg>
+    <svg class="w3" viewBox="0 0 2880 90" preserveAspectRatio="none"><path style="fill:var(--sand)" d="M0 70c360-28 720-28 1080 0s720 28 1080 0 360-20 720 0v20H0z"/></svg>
+  </div>
+</section>
+{% endblock %}
+
+{% block content %}
+{% if error %}
+  <div class="flash error">{{ error }}</div>
+{% endif %}
+
+{% if results %}
+  <h2>Results for <span style="color:var(--ocean)">{{ label }}</span></h2>
+  <ul class="results">
+    {% for r in results %}
+    <li class="result {{ r.state }}">
+      <span class="dom">{{ label }}<span class="tld">.{{ r.tld }}</span></span>
+      {% if r.state == 'available' %}
+        <span class="badge available">Available</span>
+        {% if g.user %}
+          <a class="btn teal" href="{{ url_for('register_domain', name=label, tld=r.tld) }}">Register</a>
+        {% else %}
+          <a class="btn teal" href="{{ url_for('login', next=url_for('register_domain', name=label, tld=r.tld)) }}">Log in to register</a>
+        {% endif %}
+      {% elif r.state == 'taken' %}
+        <span class="badge taken">Taken</span>
+        <a class="btn ghost sm" href="{{ url_for('whois_page', q=label ~ '.' ~ r.tld) }}">WHOIS</a>
+      {% elif r.state == 'yours' %}
+        <span class="badge yours">You own this</span>
+        <a class="btn ghost sm" href="{{ url_for('my_domains') }}">Manage</a>
+      {% elif r.state == 'limit' %}
+        <span class="badge limit">Limit reached</span><span class="why">{{ r.msg }}</span>
+      {% else %}
+        <span class="badge {{ r.state }}">{{ 'Reserved' if r.state == 'reserved' else 'Not allowed' }}</span><span class="why">{{ r.msg }}</span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+{% elif not error %}
+  <div class="grid cols-3">
+    <div class="card flat"><h3>1 · Search</h3><p class="muted">Try a few names. Your name will end in <code>.{{ cfg.tlds[0] }}</code>.</p></div>
+    <div class="card flat"><h3>2 · Request</h3><p class="muted">Tell us the IP address of your web server VM. Your instructor reviews the request.</p></div>
+    <div class="card flat"><h3>3 · Go live</h3><p class="muted">After approval, <code>http://yourname.{{ cfg.tlds[0] }}</code> works for everyone on the lab network.</p></div>
+  </div>
+{% endif %}
+{% endblock %}

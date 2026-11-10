@@ -1,0 +1,10 @@
+# Never commit secrets, keys, live state or caches
+__pycache__/
+*.pyc
+*.db
+*.db-wal
+*.db-shm
+*.jnl
+*.key
+registrar.env
+.env

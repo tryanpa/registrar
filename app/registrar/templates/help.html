@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Help · {{ cfg.registrar_name }}{% endblock %}
+{% block content %}
+<div class="page-title"><h1>How it works</h1></div>
+<div class="grid cols-2">
+  <div class="card">
+    <h2>Getting a domain</h2>
+    <ol class="steps">
+      <li><div><strong>Sign up</strong><br><span class="muted">Create an account. Your name is shown in WHOIS.</span></div></li>
+      <li><div><strong>Search</strong><br><span class="muted">Find a name that's free under {% for t in cfg.tlds %}<code>.{{ t }}</code>{% if not loop.last %} or {% endif %}{% endfor %}.</span></div></li>
+      <li><div><strong>Request it</strong><br><span class="muted">Enter your web server's IP address. You can hold up to {{ cfg.max_domains }} name{{ 's' if cfg.max_domains != 1 }} at a time.</span></div></li>
+      <li><div><strong>Wait for approval</strong><br><span class="muted">Your instructor reviews it. Once approved, it's live in DNS within seconds.</span></div></li>
+      <li><div><strong>Visit your site</strong><br><span class="muted">Open <code>http://yourname.{{ cfg.tlds[0] }}</code> in a browser on the lab network.</span></div></li>
+    </ol>
+  </div>
+  <div class="card">
+    <h2>Check it from the command line</h2>
+    <p class="muted">Ask the lab's DNS server ({{ cfg.dns_server }}):</p>
+<pre><code>dig +short mysite.{{ cfg.tlds[0] }}
+dig mysite.{{ cfg.tlds[0] }} @{{ cfg.dns_server }}</code></pre>
+    <p class="muted">Look up the registration record:</p>
+<pre><code>whois -h {{ cfg.registrar_host }} mysite.{{ cfg.tlds[0] }}</code></pre>
+    <p class="muted">Remember: type <code>http://mysite.{{ cfg.tlds[0] }}</code> in full, or your browser may treat it as a search.</p>
+  </div>
+  <div class="card">
+    <h2>If it isn't working</h2>
+    <ul>
+      <li>Is the request approved? Check <a href="{{ url_for('my_domains') }}">My domains</a>.</li>
+      <li>Does <code>dig +short</code> show your VM's IP? If not, check the IP you entered.</li>
+      <li>Does the IP answer? Try <code>ping</code> and <code>curl http://&lt;ip&gt;</code>.</li>
+      <li>Is your web server listening on port 80 and not blocked by a firewall?</li>
+      <li>Does your VM use <code>{{ cfg.dns_server }}</code> as its DNS server?</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>Naming rules</h2>
+    <ul>
+      <li>3-40 characters: letters, numbers and single hyphens.</li>
+      <li>No hyphen at the start or end.</li>
+      <li>Some names are reserved for lab infrastructure.</li>
+      <li><code>www.yourname.{{ cfg.tlds[0] }}</code> automatically points to the same place.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

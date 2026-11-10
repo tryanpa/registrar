@@ -1,0 +1,21 @@
+[Unit]
+Description=Sandbar Registrar (web)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=registrar
+Group=registrar
+EnvironmentFile=/etc/registrar/registrar.env
+Environment=PYTHONPATH=/opt/registrar/app
+WorkingDirectory=/opt/registrar/app
+# One worker with threads: the login throttle is kept in memory, and SQLite is happy with it.
+ExecStart=/usr/bin/gunicorn --bind 0.0.0.0:80 --workers 1 --threads 8 --access-logfile - wsgi:app
+Restart=on-failure
+# Port 80 without running as root. (Uses only capabilities, so it works in an unprivileged LXC.)
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

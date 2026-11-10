@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Sign up · {{ cfg.registrar_name }}{% endblock %}
+{% block content %}
+<div class="narrow">
+  <div class="card">
+    <h1 style="font-size:1.6rem">Create your account</h1>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field"><label for="display_name">Your name</label>
+        <input id="display_name" name="display_name" type="text" required maxlength="80" value="{{ form.get('display_name','') }}" autocomplete="name">
+        <div class="hint">This is the "registrant" shown in WHOIS lookups.</div></div>
+      <div class="field"><label for="username">Username</label>
+        <input id="username" name="username" type="text" required minlength="3" maxlength="32" value="{{ form.get('username','') }}" autocomplete="username" autocapitalize="off">
+        <div class="hint">Lowercase letters, numbers, dots, dashes and underscores.</div></div>
+      <div class="field"><label for="email">Email <span class="muted" style="font-weight:400">(optional)</span></label>
+        <input id="email" name="email" type="email" maxlength="120" value="{{ form.get('email','') }}" autocomplete="email"></div>
+      <div class="field"><label for="password">Password</label>
+        <input id="password" name="password" type="password" required minlength="8" autocomplete="new-password"></div>
+      <div class="field"><label for="password2">Repeat password</label>
+        <input id="password2" name="password2" type="password" required minlength="8" autocomplete="new-password"></div>
+      {% if cfg.signup_code %}
+      <div class="field"><label for="code">Class code</label>
+        <input id="code" name="code" type="text" required autocomplete="off">
+        <div class="hint">Your instructor will give you this.</div></div>
+      {% endif %}
+      <button class="btn" type="submit" style="width:100%">Sign up</button>
+    </form>
+    <p class="muted" style="margin:1rem 0 0;text-align:center">Already registered? <a href="{{ url_for('login') }}">Log in</a></p>
+  </div>
+</div>
+{% endblock %}

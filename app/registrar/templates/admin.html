@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Admin · {{ cfg.registrar_name }}{% endblock %}
+{% block content %}
+<div class="page-title">
+  <h1>Approval queue</h1>
+  <div class="btn-row">
+    <a class="btn ghost sm" href="{{ url_for('admin_domains') }}">All domains</a>
+    <a class="btn ghost sm" href="{{ url_for('admin_users') }}">Students</a>
+    <form class="inline" method="post" action="{{ url_for('admin_resync') }}" data-confirm="Re-send every approved domain to the DNS server?">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn ghost sm" type="submit">Re-sync DNS</button>
+    </form>
+  </div>
+</div>
+
+<div class="grid cols-3" style="margin-bottom:1.25rem">
+  <div class="card stat"><div class="n">{{ pending|length }}</div><div class="l">waiting for approval</div></div>
+  <div class="card stat"><div class="n">{{ counts.get('approved', 0) }}</div><div class="l">live domains</div></div>
+  <div class="card stat"><div class="n">{{ users }}</div><div class="l">accounts</div></div>
+</div>
+
+<div class="card">
+  {% if not pending %}
+    <div class="empty"><div class="big">✅</div><h2>All caught up</h2><p class="muted" style="margin:0">No requests are waiting.</p></div>
+  {% else %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Domain</th><th>Student</th><th>Points to</th><th>About</th><th>Requested</th><th></th></tr></thead>
+    <tbody>
+    {% for d in pending %}
+    <tr>
+      <td><strong>{{ d.name }}</strong><span style="color:var(--ocean)">.{{ d.tld }}</span></td>
+      <td>{{ d.display_name }}<br><span class="muted">@{{ d.username }}</span></td>
+      <td><code>{{ d.ip }}</code></td>
+      <td>{{ d.purpose or '—' }}</td>
+      <td class="muted">{{ d.created_at }}</td>
+      <td class="actions">
+        <form class="inline" method="post" action="{{ url_for('admin_approve', domain_id=d.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn teal sm" type="submit">Approve</button>
+        </form>
+        <form class="reject-form" method="post" action="{{ url_for('admin_reject', domain_id=d.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="text" name="note" placeholder="Reason (optional)" maxlength="200" aria-label="Reason for rejecting">
+          <button class="btn danger sm" type="submit">Reject</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+
+<h2 style="margin-top:1.75rem">Recent activity</h2>
+<div class="card flat">
+  <div class="table-wrap">
+  <table>
+    <tbody>
+    {% for e in events %}
+      <tr><td class="muted" style="white-space:nowrap">{{ e.ts }}</td><td>@{{ e.actor }}</td><td><span class="badge info">{{ e.action }}</span></td><td>{{ e.detail }}</td></tr>
+    {% else %}
+      <tr><td class="muted">Nothing yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}
