@@ -64,16 +64,48 @@ class Dns:
         u.replace("www." + fqdn, self.cfg.ttl, "CNAME", fqdn)
         self._send(u, f"{fqdn} A {ip}")
 
-    def unpublish(self, name, tld):
+    def unpublish(self, name, tld, labels=()):
+        """Remove a domain from DNS: the apex A, the www alias and any student subdomains (by label)."""
         fqdn = f"{name}.{tld}."
         u = self._new_update(tld)
         u.delete(fqdn, "A")
         u.delete("www." + fqdn, "CNAME")
-        self._send(u, f"delete {fqdn}")
+        for label in labels:
+            u.delete(f"{label}.{fqdn}", "A")
+            u.delete(f"{label}.{fqdn}", "CNAME")
+        self._send(u, f"delete {fqdn}" + (f" (+{len(labels)} subdomains)" if labels else ""))
 
-    def lookup(self, name, tld):
-        """Ask the DNS server what it currently answers for this domain (A records)."""
-        fqdn = f"{name}.{tld}."
+    def set_record(self, name, tld, label, rtype, value):
+        """Create or replace a subdomain. Done in ONE update message, so there is never a moment
+        with both an A and a CNAME at the same name."""
+        sub = f"{label}.{name}.{tld}."
+        u = self._new_update(tld)
+        u.delete(sub, "A")
+        u.delete(sub, "CNAME")
+        if rtype == "A":
+            u.add(sub, self.cfg.ttl, "A", value)
+        elif rtype == "CNAME":
+            u.add(sub, self.cfg.ttl, "CNAME", value.rstrip(".") + ".")
+        else:
+            raise DnsError(f"Unsupported record type {rtype!r}")
+        self._send(u, f"{sub} {rtype} {value}")
+
+    def remove_record(self, name, tld, label):
+        sub = f"{label}.{name}.{tld}."
+        u = self._new_update(tld)
+        u.delete(sub, "A")
+        u.delete(sub, "CNAME")
+        self._send(u, f"delete {sub}")
+
+    def publish_all(self, name, tld, ip, records=()):
+        """(Re)send a domain and all its subdomains. Used by the admin re-sync."""
+        self.publish(name, tld, ip)
+        for r in records:
+            self.set_record(name, tld, r["label"], r["rtype"], r["value"])
+
+    def lookup(self, name, tld, label=None):
+        """Ask the DNS server what it currently answers for this name (A records; a CNAME is followed)."""
+        fqdn = f"{label}.{name}.{tld}." if label else f"{name}.{tld}."
         c = self.cfg
         if c.dns_dry_run:
             return ["(dry run)"]

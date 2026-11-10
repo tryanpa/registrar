@@ -19,6 +19,9 @@ def send(zone, ops, keyring=good):
 cases = [
  ("ALLOW  add A   foo.beach",                  "beach.", [("add","foo.beach.",300,"A","10.0.20.5")], good, "NOERROR"),
  ("ALLOW  add CNAME www.foo.beach",            "beach.", [("add","www.foo.beach.",300,"CNAME","foo.beach.")], good, "NOERROR"),
+ ("ALLOW  add A   blog.foo.beach (student subdomain)", "beach.", [("add","blog.foo.beach.",300,"A","10.0.20.6")], good, "NOERROR"),
+ ("ALLOW  add CNAME shop.foo.beach -> foo.beach",       "beach.", [("add","shop.foo.beach.",300,"CNAME","foo.beach.")], good, "NOERROR"),
+ ("ALLOW  delete blog.foo.beach and shop.foo.beach",    "beach.", [("delete","blog.foo.beach.","A"),("delete","shop.foo.beach.","CNAME")], good, "NOERROR"),
  ("DENY   NS at the apex of beach",            "beach.", [("add","beach.",300,"NS","evil.example.")], good, "REFUSED"),
  ("DENY   A at the apex of beach",             "beach.", [("add","beach.",300,"A","10.9.9.9")], good, "REFUSED"),
  ("DENY   SOA change",                         "beach.", [("replace","beach.",300,"SOA","a. b. 99 1 1 1 1")], good, "REFUSED"),

@@ -14,7 +14,7 @@ and your existing `sandbar.lab` zone is never modified.
                                                                                     sandbar.lab: untouched
 ```
 
-**Rules:** one name per student by default (`MAX_DOMAINS_PER_STUDENT`) · every request needs approval · `www.` comes free ·
+**Rules:** once a name is approved, students can add subdomains such as `blog.mysite.beach` (A records or CNAME aliases within their own domain, `MAX_RECORDS_PER_DOMAIN`, default 5) · one name per student by default (`MAX_DOMAINS_PER_STUDENT`) · every request needs approval · `www.` comes free ·
 names are 3-40 chars of `a-z 0-9 -` · lab infrastructure names are reserved · IPs must be in `10.0.0.0/8`
 (`ALLOWED_NETWORKS`) and outside `DENIED_NETWORKS` (the DNS server is always blocked).
 
@@ -71,7 +71,7 @@ Students should type `http://mysite.beach` in full, since a bare `mysite.beach` 
 | Start a new class | stop services, delete the DB, empty the beach zone (`rndc freeze beach`, delete `/var/lib/bind/db.beach` and its `.jnl`, re-run the installer, `rndc thaw`/restart), start services |
 
 ## How safe is it for Bind9?
-* The registrar's **TSIG key** can only add/replace/delete `A` and `CNAME` records under `beach.`. It cannot
+* The registrar's **TSIG key** can only add/replace/delete `A` and `CNAME` records under `beach.` (that covers student subdomains too, so no Bind9 change was needed for them). It cannot
   touch `NS`, `SOA` or the zone apex, and BIND refuses every update the key signs for any other zone,
   including `sandbar.lab`. `tests/bind_policy_check.py` proves each of these against a real Bind9.
 * **`.lab` is impossible by design, in three layers:** the app refuses to start if `TLDS` contains `lab` or
@@ -87,7 +87,7 @@ Students should type `http://mysite.beach` in full, since a bare `mysite.beach` 
 
 ## Development / tests
 ```bash
-python3 -m unittest discover -s tests -v          # 15 tests, DNS faked
+python3 -m unittest discover -s tests -v          # 30 tests, DNS faked
 # against a real Bind9 (e.g. a throwaway named on port 5300):
 LIVE_DNS_SERVER=127.0.0.1 LIVE_DNS_PORT=5300 LIVE_TSIG_SECRET=... python3 -m unittest discover -s tests -v
 ```

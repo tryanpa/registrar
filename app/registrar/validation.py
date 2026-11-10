@@ -25,6 +25,20 @@ def label_error(label, reserved_extra=()):
     return None
 
 
+SUB_MIN, SUB_MAX = 2, 40
+
+
+def sub_label_error(label):
+    """Rules for a student-created subdomain label such as 'blog' (www is managed automatically)."""
+    if not (SUB_MIN <= len(label) <= SUB_MAX):
+        return f"Subdomain names must be {SUB_MIN}-{SUB_MAX} characters long."
+    if not LABEL_RE.match(label):
+        return "Use only letters, numbers and single hyphens (no hyphen at the start or end)."
+    if label == "www":
+        return "'www' is set up for you automatically."
+    return None
+
+
 def is_reserved(label, reserved_extra=()):
     return label in RESERVED or label in reserved_extra
 

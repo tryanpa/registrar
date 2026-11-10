@@ -35,6 +35,18 @@ CREATE TABLE IF NOT EXISTS domains (
 CREATE UNIQUE INDEX IF NOT EXISTS domains_active_name
     ON domains(name, tld) WHERE status IN ('pending', 'approved');
 
+-- Subdomains students add under a live domain, e.g. blog.mysite.beach. One record per label.
+-- rtype is 'A' (value = IPv4) or 'CNAME' (value = target name inside the same domain).
+CREATE TABLE IF NOT EXISTS records (
+    id         INTEGER PRIMARY KEY,
+    domain_id  INTEGER NOT NULL REFERENCES domains(id),
+    label      TEXT NOT NULL,
+    rtype      TEXT NOT NULL CHECK (rtype IN ('A', 'CNAME')),
+    value      TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (domain_id, label)
+);
+
 CREATE TABLE IF NOT EXISTS events (
     id     INTEGER PRIMARY KEY,
     ts     TEXT NOT NULL,

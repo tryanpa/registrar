@@ -195,3 +195,18 @@ footer { border-top: 1px solid var(--line); color: var(--ink-soft); font-size: .
 /* keep the hero search field light in dark mode (it sits inside a white pill) */
 .searchbox input[type=search] { background: transparent; color: #17313f; border: 0; }
 .searchbox input[type=search]:focus { outline: 0; border: 0; }
+
+/* ---------- subdomains ---------- */
+.subs { border-top: 1px solid var(--line); margin-top: 1rem; padding-top: .9rem; }
+.subs h4 { margin: 0 0 .5rem; font-size: 1rem; }
+.rec { display: flex; justify-content: space-between; align-items: center; gap: .75rem; padding: .5rem .7rem; background: var(--sand-2); border-radius: 10px; margin-bottom: .5rem; }
+.rec-name { word-break: break-all; font-size: .95rem; }
+.rec-name .muted { font-size: .85rem; }
+details.add-rec { margin: .6rem 0 1rem; }
+details.add-rec summary { cursor: pointer; font-weight: 600; color: var(--ocean); margin-bottom: .6rem; }
+details.add-rec form { margin-bottom: .9rem; }
+details.add-rec label { font-size: .88rem; }
+.sub-row { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.sub-row input[name=label] { flex: 1 1 7rem; min-width: 6rem; }
+.sub-row input[name=value], .sub-row select { flex: 1 1 9rem; min-width: 8rem; width: auto; }
+.sub-row .suffix { color: var(--ink-soft); font-size: .9rem; word-break: break-all; }

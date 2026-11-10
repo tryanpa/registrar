@@ -26,21 +26,48 @@ LIVE = os.environ.get("LIVE_DNS_SERVER")
 
 
 class FakeDns:
+    """Mimics the Dns class. Keys are full names such as 'mysite.beach' or 'blog.mysite.beach'."""
+
     def __init__(self):
-        self.records, self.fail = {}, False
+        self.records, self.cnames, self.fail = {}, {}, False
+
+    def _check(self):
+        if self.fail:
+            raise DnsError("simulated outage")
 
     def publish(self, name, tld, ip):
-        if self.fail:
-            raise DnsError("simulated outage")
+        self._check()
         self.records[f"{name}.{tld}"] = ip
 
-    def unpublish(self, name, tld):
-        if self.fail:
-            raise DnsError("simulated outage")
+    def unpublish(self, name, tld, labels=()):
+        self._check()
         self.records.pop(f"{name}.{tld}", None)
+        for label in labels:
+            self.records.pop(f"{label}.{name}.{tld}", None)
+            self.cnames.pop(f"{label}.{name}.{tld}", None)
 
-    def lookup(self, name, tld):
-        ip = self.records.get(f"{name}.{tld}")
+    def set_record(self, name, tld, label, rtype, value):
+        self._check()
+        key = f"{label}.{name}.{tld}"
+        self.records.pop(key, None)
+        self.cnames.pop(key, None)
+        (self.records if rtype == "A" else self.cnames)[key] = value
+
+    def remove_record(self, name, tld, label):
+        self._check()
+        self.records.pop(f"{label}.{name}.{tld}", None)
+        self.cnames.pop(f"{label}.{name}.{tld}", None)
+
+    def publish_all(self, name, tld, ip, records=()):
+        self.publish(name, tld, ip)
+        for r in records:
+            self.set_record(name, tld, r["label"], r["rtype"], r["value"])
+
+    def lookup(self, name, tld, label=None):
+        key = f"{label}.{name}.{tld}" if label else f"{name}.{tld}"
+        if key in self.cnames:                       # follow the alias like a resolver would
+            key = self.cnames[key]
+        ip = self.records.get(key)
         return [ip] if ip else []
 
 
@@ -99,6 +126,12 @@ class AppTests(unittest.TestCase):
         self.app.testing = True
 
     def tearDown(self):
+        if LIVE:                                   # leave the real DNS server exactly as we found it
+            conn = dbm.connect(self.cfg.db_path)
+            for d in conn.execute("SELECT * FROM domains WHERE status='approved'").fetchall():
+                labels = [r["label"] for r in conn.execute("SELECT label FROM records WHERE domain_id=?", (d["id"],))]
+                self.dns.unpublish(d["name"], d["tld"], labels)
+            conn.close()
         self.tmp.cleanup()
 
     # --- helpers ---
@@ -333,6 +366,150 @@ class AppTests(unittest.TestCase):
         conn = dbm.connect(self.cfg.db_path)
         self.assertEqual(conn.execute("SELECT status FROM domains WHERE id=?", (did,)).fetchone()[0], "pending")
         conn.close()
+
+    # ---------------------------------------------------------------- subdomains
+    def live_domain(self, name="mysite", ip="10.0.20.15", user="alice"):
+        client, teacher = self.signup(user), self.teacher()
+        self.request_domain(client, name, "beach", ip)
+        did = self.domain_id(name, "beach")
+        self.post(teacher, f"/admin/domains/{did}/approve", token=self.token(teacher, "/admin"))
+        return client, teacher, did
+
+    def add_rec(self, c, did, label, rtype, value):
+        return self.post(c, f"/domains/{did}/records", {"label": label, "rtype": rtype, "value": value},
+                         token=self.token(c, "/domains"))
+
+    def rec_count(self):
+        conn = dbm.connect(self.cfg.db_path)
+        n = conn.execute("SELECT COUNT(*) FROM records").fetchone()[0]
+        conn.close()
+        return n
+
+    def test_subdomains_a_and_cname(self):
+        alice, _, did = self.live_domain()
+        r = self.add_rec(alice, did, "blog", "A", "10.0.20.20")
+        self.assertIn(b"blog.mysite.beach is live", r.data)
+        self.assertEqual(self.dns.lookup("mysite", "beach", "blog"), ["10.0.20.20"])
+        r = self.add_rec(alice, did, "shop", "CNAME", "mysite.beach")          # alias of the main name
+        self.assertIn(b"shop.mysite.beach is live", r.data)
+        self.assertEqual(self.dns.lookup("mysite", "beach", "shop"), ["10.0.20.15"])
+        r = self.add_rec(alice, did, "news", "CNAME", "blog.mysite.beach")     # alias of a subdomain
+        self.assertIn(b"news.mysite.beach is live", r.data)
+        self.assertEqual(self.dns.lookup("mysite", "beach", "news"), ["10.0.20.20"])
+        page = alice.get("/domains").get_data(as_text=True)
+        self.assertIn("3 of 5 used", page)
+        self.assertIn("10.0.20.20", page)
+        self.assertEqual(self.dns.lookup("mysite", "beach"), ["10.0.20.15"])   # main name untouched
+
+    def test_subdomain_rules(self):
+        self.build_app(DENIED_NETWORKS="10.0.10.25/32")            # same rule in fake and live runs
+        alice, _, did = self.live_domain()
+        bob_dns_before = dict(getattr(self.dns, "records", {}))
+        for label, rtype, value, why in [
+            ("www", "A", "10.0.20.20", "www is automatic"),
+            ("a", "A", "10.0.20.20", "too short"),
+            ("-bad", "A", "10.0.20.20", "hyphen"),
+            ("my_blog", "A", "10.0.20.20", "underscore"),
+            ("a.b", "A", "10.0.20.20", "dots"),
+            ("blog", "A", "8.8.8.8", "outside the lab network"),
+            ("blog", "A", "10.0.10.25", "the DNS server"),
+            ("blog", "A", "10.0.20.20; evil", "garbage IP"),
+            ("blog", "CNAME", "other.beach", "someone else's name"),
+            ("blog", "CNAME", "evil.example", "outside .beach"),
+            ("blog", "CNAME", "blog.mysite.beach", "alias to itself / nonexistent"),
+            ("blog", "CNAME", "x.mysite.beach", "target that doesn't exist"),
+            ("blog", "MX", "10.0.20.20", "unsupported type"),
+            ("blog", "", "10.0.20.20", "no type"),
+        ]:
+            self.add_rec(alice, did, label, rtype, value)
+            self.assertEqual(self.rec_count(), 0, why)
+        if not LIVE:
+            self.assertEqual(self.dns.records, bob_dns_before)
+
+    def test_subdomain_duplicates_limit_and_dependencies(self):
+        self.build_app(MAX_RECORDS_PER_DOMAIN="2")
+        alice, _, did = self.live_domain()
+        self.add_rec(alice, did, "blog", "A", "10.0.20.20")
+        self.assertIn(b"already exists", self.add_rec(alice, did, "blog", "A", "10.0.20.21").data)
+        self.add_rec(alice, did, "shop", "CNAME", "blog.mysite.beach")
+        self.assertIn(b"up to 2 subdomains", self.add_rec(alice, did, "more", "A", "10.0.20.22").data)
+        self.assertEqual(self.rec_count(), 2)
+        self.assertEqual(self.dns.lookup("mysite", "beach", "blog"), ["10.0.20.20"])   # first one unchanged
+        # can't remove blog while shop is an alias of it
+        conn = dbm.connect(self.cfg.db_path)
+        blog_id = conn.execute("SELECT id FROM records WHERE label='blog'").fetchone()[0]
+        shop_id = conn.execute("SELECT id FROM records WHERE label='shop'").fetchone()[0]
+        conn.close()
+        r = self.post(alice, f"/domains/{did}/records/{blog_id}/delete", token=self.token(alice, "/domains"))
+        self.assertIn(b"Remove the alias first", r.data)
+        self.assertEqual(self.rec_count(), 2)
+        self.post(alice, f"/domains/{did}/records/{shop_id}/delete", token=self.token(alice, "/domains"))
+        r = self.post(alice, f"/domains/{did}/records/{blog_id}/delete", token=self.token(alice, "/domains"))
+        self.assertIn(b"was removed", r.data)
+        self.assertEqual(self.rec_count(), 0)
+        self.assertEqual(self.dns.lookup("mysite", "beach", "blog"), [])
+
+    def test_subdomains_need_approval_and_ownership(self):
+        alice, teacher = self.signup("alice"), self.teacher()
+        self.request_domain(alice, "mysite")                       # still pending
+        did = self.domain_id("mysite", "beach")
+        self.assertIn(b"once your name has been approved", self.add_rec(alice, did, "blog", "A", "10.0.20.20").data)
+        self.post(teacher, f"/admin/domains/{did}/approve", token=self.token(teacher, "/admin"))
+        bob = self.signup("bobby")
+        self.assertEqual(self.add_rec(bob, did, "blog", "A", "10.0.20.20").status_code, 404)   # not bob's domain
+        self.assertEqual(self.rec_count(), 0)
+        self.add_rec(alice, did, "blog", "A", "10.0.20.20")
+        conn = dbm.connect(self.cfg.db_path)
+        rid = conn.execute("SELECT id FROM records").fetchone()[0]
+        conn.close()
+        r = self.post(bob, f"/domains/{did}/records/{rid}/delete", token=self.token(bob, "/domains"))
+        self.assertEqual(r.status_code, 404)
+        self.assertEqual(self.rec_count(), 1)
+
+    def test_dns_outage_keeps_nothing(self):
+        if LIVE:
+            self.skipTest("needs the fake DNS")
+        alice, _, did = self.live_domain()
+        self.dns.fail = True
+        self.assertIn(b"nothing was changed", self.add_rec(alice, did, "blog", "A", "10.0.20.20").data)
+        self.assertEqual(self.rec_count(), 0)
+
+    def test_release_and_revoke_remove_subdomains(self):
+        alice, teacher, did = self.live_domain()
+        self.add_rec(alice, did, "blog", "A", "10.0.20.20")
+        self.add_rec(alice, did, "shop", "CNAME", "mysite.beach")
+        self.post(alice, f"/domains/{did}/release", token=self.token(alice, "/domains"))
+        self.assertEqual(self.rec_count(), 0)
+        for label in ("blog", "shop"):
+            self.assertEqual(self.dns.lookup("mysite", "beach", label), [])
+        self.assertEqual(self.dns.lookup("mysite", "beach"), [])
+        # admin revoke path
+        bob, teacher2 = self.signup("bobby"), self.teacher()
+        self.request_domain(bob, "bobsite", "beach", "10.0.20.30")
+        bid = self.domain_id("bobsite", "beach")
+        self.post(teacher2, f"/admin/domains/{bid}/approve", token=self.token(teacher2, "/admin"))
+        self.add_rec(bob, bid, "api", "A", "10.0.20.31")
+        self.post(teacher2, f"/admin/domains/{bid}/revoke", {"note": "test"}, token=self.token(teacher2, "/admin"))
+        self.assertEqual(self.rec_count(), 0)
+        self.assertEqual(self.dns.lookup("bobsite", "beach", "api"), [])
+
+    def test_resync_includes_subdomains(self):
+        if LIVE:
+            self.skipTest("needs the fake DNS")
+        alice, teacher, did = self.live_domain()
+        self.add_rec(alice, did, "blog", "A", "10.0.20.20")
+        self.dns.records.clear()                                   # pretend DNS lost everything
+        r = self.post(teacher, "/admin/resync", token=self.token(teacher, "/admin"))
+        self.assertIn(b"Re-sent 1 approved", r.data)
+        self.assertEqual(self.dns.lookup("mysite", "beach"), ["10.0.20.15"])
+        self.assertEqual(self.dns.lookup("mysite", "beach", "blog"), ["10.0.20.20"])
+
+    def test_subdomains_can_be_turned_off(self):
+        self.build_app(MAX_RECORDS_PER_DOMAIN="0")
+        alice, _, did = self.live_domain()
+        self.assertNotIn(b"Add a subdomain", alice.get("/domains").data)
+        self.assertIn(b"up to 0 subdomains", self.add_rec(alice, did, "blog", "A", "10.0.20.20").data)
+        self.assertEqual(self.rec_count(), 0)
 
     def test_access_control(self):
         alice, bob = self.signup("alice"), self.signup("bobby")

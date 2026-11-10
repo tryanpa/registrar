@@ -48,6 +48,7 @@ class Config:
     whois_port: int
     whois_show_email: bool
     reserved_extra: tuple
+    max_records: int           # subdomains (A/CNAME records) a student may add under each domain
     max_domains: int           # active (pending + approved) names one student may hold
 
 
@@ -89,5 +90,6 @@ def from_env(env=None):
         whois_port=int(env.get("WHOIS_PORT", "43")),
         whois_show_email=_bool(env.get("WHOIS_SHOW_EMAIL", "false")),
         reserved_extra=_csv(env.get("RESERVED_NAMES", "")),
+        max_records=max(0, int(env.get("MAX_RECORDS_PER_DOMAIN", "5"))),
         max_domains=max(1, int(env.get("MAX_DOMAINS_PER_STUDENT", "1"))),
     )

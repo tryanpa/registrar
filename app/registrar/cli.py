@@ -65,8 +65,9 @@ def main(argv=None):
         dns, bad = Dns(cfg), 0
         for d in conn.execute("SELECT * FROM domains WHERE status='approved'"):
             try:
-                dns.publish(d["name"], d["tld"], d["ip"])
-                print(f"ok    {d['name']}.{d['tld']} -> {d['ip']}")
+                recs = conn.execute("SELECT * FROM records WHERE domain_id=?", (d["id"],)).fetchall()
+                dns.publish_all(d["name"], d["tld"], d["ip"], recs)
+                print(f"ok    {d['name']}.{d['tld']} -> {d['ip']}" + (f"  (+{len(recs)} subdomains)" if recs else ""))
             except DnsError as exc:
                 bad += 1
                 print(f"FAIL  {d['name']}.{d['tld']}: {exc}")

@@ -45,6 +45,54 @@
       {% if d.status == 'approved' %}
         <p class="muted" style="font-size:.88rem">Test it: <code>dig +short {{ d.name }}.{{ d.tld }}</code> or open <code>http://{{ d.name }}.{{ d.tld }}</code></p>
       {% endif %}
+      {% if d.status == 'approved' and cfg.max_records > 0 %}
+      {% set my_recs = recs.get(d.id, []) %}
+      {% set apex = d.name ~ '.' ~ d.tld %}
+      <div class="subs">
+        <h4>Subdomains <span class="muted">{{ my_recs|length }} of {{ cfg.max_records }} used</span></h4>
+        {% for r in my_recs %}
+        <div class="rec">
+          <div class="rec-name"><strong>{{ r.label }}</strong>.{{ apex }}
+            <div class="muted">{% if r.rtype == 'A' %}points to <code>{{ r.value }}</code>{% else %}alias of <code>{{ r.value }}</code>{% endif %}</div></div>
+          <form method="post" action="{{ url_for('delete_record', domain_id=d.id, record_id=r.id) }}" class="inline"
+                data-confirm="Remove {{ r.label }}.{{ apex }}?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn danger sm" type="submit">Remove</button>
+          </form>
+        </div>
+        {% endfor %}
+        {% if my_recs|length < cfg.max_records %}
+        <details class="add-rec">
+          <summary>+ Add a subdomain</summary>
+          <form method="post" action="{{ url_for('add_record', domain_id=d.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="rtype" value="A">
+            <label for="sa{{ d.id }}">Point a name at an IP address (A record)</label>
+            <div class="sub-row">
+              <input id="sa{{ d.id }}" name="label" type="text" placeholder="blog" required minlength="2" maxlength="40" autocapitalize="off" spellcheck="false" aria-label="Subdomain name">
+              <span class="suffix">.{{ apex }}</span>
+              <input name="value" type="text" placeholder="10.0.20.20" required inputmode="decimal" autocomplete="off" aria-label="IP address">
+              <button class="btn ghost" type="submit">Add</button>
+            </div>
+          </form>
+          <form method="post" action="{{ url_for('add_record', domain_id=d.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="rtype" value="CNAME">
+            <label for="sc{{ d.id }}">Or make it an alias of another name (CNAME)</label>
+            <div class="sub-row">
+              <input id="sc{{ d.id }}" name="label" type="text" placeholder="shop" required minlength="2" maxlength="40" autocapitalize="off" spellcheck="false" aria-label="Alias name">
+              <span class="suffix">.{{ apex }}</span>
+              <select name="value" aria-label="Alias target">
+                <option value="{{ apex }}">{{ apex }}</option>
+                {% for r in my_recs if r.rtype == 'A' %}<option value="{{ r.label }}.{{ apex }}">{{ r.label }}.{{ apex }}</option>{% endfor %}
+              </select>
+              <button class="btn ghost" type="submit">Add</button>
+            </div>
+          </form>
+        </details>
+        {% endif %}
+      </div>
+      {% endif %}
       <div class="btn-row">
         <a class="btn ghost sm" href="{{ url_for('whois_page', q=d.name ~ '.' ~ d.tld) }}">View WHOIS</a>
         <form method="post" action="{{ url_for('release', domain_id=d.id) }}" class="inline"

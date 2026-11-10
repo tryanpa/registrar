@@ -78,6 +78,16 @@ def limit_message():
     return f"You can hold up to {n} name{'s' if n != 1 else ''}. Release one to register another."
 
 
+def records_for(domain_id):
+    return db().execute("SELECT * FROM records WHERE domain_id=? ORDER BY label", (domain_id,)).fetchall()
+
+
+def cname_targets(d, records):
+    """Names a student's alias may point to: the domain itself, or one of its A-record subdomains."""
+    apex = f"{d['name']}.{d['tld']}"
+    return [apex] + [f"{r['label']}.{apex}" for r in records if r["rtype"] == "A"]
+
+
 def availability(name, tld):
     """Status of one name in one TLD for the current user."""
     err = v.label_error(name, cfg().reserved_extra)
@@ -256,7 +266,11 @@ def register(app: Flask):
             """SELECT * FROM domains WHERE owner_id=? AND status IN ('pending','approved','rejected','revoked')
                ORDER BY CASE status WHEN 'approved' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END, created_at DESC""",
             (g.user["id"],)).fetchall()
-        return render_template("domains.html", domains=rows, n_active=active_count(g.user["id"]))
+        recs = {}
+        for d in rows:
+            if d["status"] == "approved":
+                recs[d["id"]] = records_for(d["id"])
+        return render_template("domains.html", domains=rows, recs=recs, n_active=active_count(g.user["id"]))
 
     @app.route("/register", methods=["GET", "POST"])
     @login_required
@@ -335,14 +349,94 @@ def register(app: Flask):
         d = _own_domain(domain_id)
         if d["status"] == "approved":
             try:
-                dns().unpublish(d["name"], d["tld"])
+                dns().unpublish(d["name"], d["tld"], [r["label"] for r in records_for(d["id"])])
             except DnsError as exc:
                 flash(f"DNS update failed, nothing was changed: {exc}", "error")
                 return redirect(url_for("my_domains"))
+        db().execute("DELETE FROM records WHERE domain_id=?", (d["id"],))
         db().execute("UPDATE domains SET status='released', updated_at=? WHERE id=?", (dbm.utcnow(), d["id"]))
         dbm.log_event(db(), g.user["username"], "release", f"{d['name']}.{d['tld']}")
         db().commit()
         flash(f"{d['name']}.{d['tld']} has been released.", "info")
+        return redirect(url_for("my_domains"))
+
+    # ------------------------------------------------------------------ student: subdomains
+    @app.post("/domains/<int:domain_id>/records")
+    @login_required
+    def add_record(domain_id):
+        d = _own_domain(domain_id)
+        back = redirect(url_for("my_domains"))
+        if d["status"] != "approved":
+            flash("You can add subdomains once your name has been approved.", "info")
+            return back
+        label = request.form.get("label", "").strip().lower()
+        rtype = request.form.get("rtype", "")
+        value = request.form.get("value", "").strip().lower().rstrip(".")
+        problem = v.sub_label_error(label)
+        if not problem:
+            if rtype == "A":
+                value, problem = v.ip_error(value, cfg().allowed_nets, cfg().denied_nets)
+            elif rtype == "CNAME":
+                if value not in cname_targets(d, records_for(d["id"])):
+                    problem = "An alias can only point to your own domain or to one of your subdomains that has an IP address."
+            else:
+                problem = "Choose a record type."
+        if problem:
+            flash(problem, "error")
+            return back
+        fqdn = f"{label}.{d['name']}.{d['tld']}"
+        try:
+            # limit check, insert and DNS change are one unit: if DNS fails, nothing is kept
+            db().execute("BEGIN IMMEDIATE")
+            if db().execute("SELECT COUNT(*) FROM records WHERE domain_id=?", (d["id"],)).fetchone()[0] >= cfg().max_records:
+                db().rollback()
+                flash(f"You can add up to {cfg().max_records} subdomains. Remove one first.", "error")
+                return back
+            if db().execute("SELECT 1 FROM records WHERE domain_id=? AND label=?", (d["id"], label)).fetchone():
+                db().rollback()
+                flash(f"{fqdn} already exists. Remove it first if you want to change it.", "error")
+                return back
+            db().execute("INSERT INTO records (domain_id, label, rtype, value, created_at) VALUES (?,?,?,?,?)",
+                         (d["id"], label, rtype, value, dbm.utcnow()))
+            try:
+                dns().set_record(d["name"], d["tld"], label, rtype, value)
+            except DnsError as exc:
+                db().rollback()
+                flash(f"DNS update failed, nothing was changed: {exc}", "error")
+                return back
+            dbm.log_event(db(), g.user["username"], "add-record", f"{fqdn} {rtype} {value}")
+            db().commit()
+        except sqlite3.OperationalError:
+            db().rollback()
+            flash("The registrar is busy, please try again.", "error")
+            return back
+        flash(f"{fqdn} is live.", "success")
+        return back
+
+    @app.post("/domains/<int:domain_id>/records/<int:record_id>/delete")
+    @login_required
+    def delete_record(domain_id, record_id):
+        d = _own_domain(domain_id)
+        rec = db().execute("SELECT * FROM records WHERE id=? AND domain_id=?", (record_id, d["id"])).fetchone()
+        if rec is None:
+            abort(404)
+        fqdn = f"{rec['label']}.{d['name']}.{d['tld']}"
+        if rec["rtype"] == "A":
+            dependents = db().execute("SELECT label FROM records WHERE domain_id=? AND rtype='CNAME' AND value=?",
+                                      (d["id"], fqdn)).fetchall()
+            if dependents:
+                names = ", ".join(r["label"] + "." + d["name"] + "." + d["tld"] for r in dependents)
+                flash(f"Remove the alias first: {names} points to {fqdn}.", "error")
+                return redirect(url_for("my_domains"))
+        try:
+            dns().remove_record(d["name"], d["tld"], rec["label"])
+        except DnsError as exc:
+            flash(f"DNS update failed, nothing was changed: {exc}", "error")
+            return redirect(url_for("my_domains"))
+        db().execute("DELETE FROM records WHERE id=?", (rec["id"],))
+        dbm.log_event(db(), g.user["username"], "remove-record", fqdn)
+        db().commit()
+        flash(f"{fqdn} was removed.", "info")
         return redirect(url_for("my_domains"))
 
     # ------------------------------------------------------------------ admin
@@ -435,10 +529,11 @@ def register(app: Flask):
             return _back()
         if d["status"] == "approved":
             try:
-                dns().unpublish(d["name"], d["tld"])
+                dns().unpublish(d["name"], d["tld"], [r["label"] for r in records_for(d["id"])])
             except DnsError as exc:
                 flash(f"DNS update failed, nothing was changed: {exc}", "error")
                 return _back()
+        db().execute("DELETE FROM records WHERE domain_id=?", (d["id"],))
         now = dbm.utcnow()
         db().execute("UPDATE domains SET status='revoked', updated_at=?, decided_by=?, admin_note=? WHERE id=?",
                      (now, g.user["username"], request.form.get("note", "").strip()[:200], d["id"]))
@@ -471,7 +566,7 @@ def register(app: Flask):
         failed = []
         for d in rows:
             try:
-                dns().publish(d["name"], d["tld"], d["ip"])
+                dns().publish_all(d["name"], d["tld"], d["ip"], records_for(d["id"]))
             except DnsError as exc:
                 failed.append(f"{d['name']}.{d['tld']}: {exc}")
         dbm.log_event(db(), g.user["username"], "resync", f"{len(rows) - len(failed)}/{len(rows)} ok")

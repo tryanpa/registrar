@@ -39,6 +39,7 @@ dig mysite.{{ cfg.tlds[0] }} @{{ cfg.dns_server }}</code></pre>
       <li>No hyphen at the start or end.</li>
       <li>Some names are reserved for lab infrastructure.</li>
       <li><code>www.yourname.{{ cfg.tlds[0] }}</code> automatically points to the same place.</li>
+      {% if cfg.max_records > 0 %}<li>Once your name is approved you can add up to {{ cfg.max_records }} subdomains, like <code>blog.yourname.{{ cfg.tlds[0] }}</code>, under <a href="{{ url_for('my_domains') }}">My domains</a>. Point one at an IP address (A record) or make it an alias of another of your names (CNAME).</li>{% endif %}
     </ul>
   </div>
 </div>
